@@ -1,0 +1,92 @@
+name: Web Deploy
+
+on:
+  workflow_run:
+    workflows: [ "Web CI" ]
+    types: [ completed ]
+    branches: [ develop, master ]
+
+permissions:
+  content: read
+  actions: read
+
+concurrency:
+  group: web-deploy-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    # On détermine l'environnement cible à partir de la branche
+    outputs:
+      target_env: ${{ steps.pick_env.outputs.target_env }}
+
+    steps:
+      - name: pick env from branch
+        id: pick_env
+        run: |
+          BRANCH="${{ github.event.workflow_run.head_branch }}"
+          if [ "$BRANCH" = "develop" ]; then
+            echo "target_env=dev" >> $GITHUB_OUTPUT
+          elif [ "$BRANCH" = "master" ]; then
+            echo "target_env=prod" >> $GITHUB_OUTPUT
+          else
+            echo "Unsupported branch: $BRANCH"; exit 1
+          fi
+
+  deploy_to_target:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: ${{ needs.deploy.outputs.target_env }}
+
+    steps:
+      - name: download dist artifact from CI run
+        uses: actions/download-artifact@v4
+        with:
+          # Télécharge l'artefact du workflow_run déclencheur
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: web_dist
+          path: .
+
+      - name: prepare SSH
+        run: |
+          cat > /tmp/id_ci <<'EOF'
+          ${{ secrets.SSH_KEY_VPS }}
+          EOF
+          chmod 600 /tmp/id_ci
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keyscan -H "${{ secrets.SERVER_IP }}" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: probe ssh
+        run: |
+          ssh -i /tmp/id_ci -o IdentitiesOnly=yes -o BatchMode=yes ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_IP }} true
+
+      - name: deploy static (atomic symlink)
+        env:
+          SERVER_IP:    ${{ secrets.SERVER_IP }}
+          SERVER_USER:  ${{ secrets.SERVER_USER }}
+          REMOTE_BASE:  ${{ vars.REMOTE_BASE || '/var/www' }}
+          APP_DIR:      ${{ vars.APP_DIR || 'ttt-web' }}
+          NODE_ENV:     ${{ vars.NODE_ENV || 'production' }}
+        run: |
+          set -e
+          RELEASES_DIR="$REMOTE_BASE/$APP_DIR/releases"
+          CURRENT_LINK="$REMOTE_BASE/$APP_DIR/current"
+          TS="$(date +%Y%m%d%H%M%S)"
+          TARGET_DIR="$RELEASES_DIR/$TS"
+
+          ssh -i /tmp/id_ci -o IdentitiesOnly=yes $SERVER_USER@$SERVER_IP "mkdir -p $TARGET_DIR $RELEASES_DIR && mkdir -p $(dirname $CURRENT_LINK)"
+          scp -i /tmp/id_ci -o IdentitiesOnly=yes api_artifact.tgz $SERVER_USER@$SERVER_IP:$TARGET_DIR/
+
+          ssh -i /tmp/id_ci -o IdentitiesOnly=yes $SERVER_USER@$SERVER_IP "
+            set -e
+            cd $TARGET_DIR
+            tar -xzf web_dist.tgz && rm -f web_dist.tgz
+            # Si Angular génère dist/<projectName>, tu peux ajuster le lien :
+            # ln -sfn $TARGET_DIR/dist/<projectName> $CURRENT_LINK
+            ln -sfn $TARGET_DIR/dist $CURRENT_LINK
+          "

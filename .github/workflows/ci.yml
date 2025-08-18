@@ -1,0 +1,49 @@
+name: Web CI
+
+on:
+  push:
+    branches: [ develop, master ]
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: 20
+
+jobs:
+  test_build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo git
+        uses: actions/checkout@v4
+
+      - name: install nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: install dependencies
+        run: npm ci
+
+      - name: check coding rules
+        run: npm run lint
+
+      - name: check packages vulnerabilities
+        run: npm audit || true
+
+      - name: execute tests
+        run: npm run test -- --ci --passWithNoTests
+
+      - name: build
+        run: npm run build
+
+      - name: pack artifact (dist)
+        run: tar -czf web_dist.tgz dist
+
+      - name: upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web_dist
+          path: web_dist.tgz
+          retention-days: 5
