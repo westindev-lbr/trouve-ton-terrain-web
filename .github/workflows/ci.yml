@@ -32,8 +32,13 @@ jobs:
       - name: check packages vulnerabilities
         run: npm audit || true
 
-      - name: execute tests
-        run: npm run test -- --ci --passWithNoTests
+      - name: Run Cypress on dist
+        uses: cypress-io/github-action@v6
+        with:
+          start: npm run serve:dist
+          wait-on: http://localhost:4200
+          browser: chrome
+          headless: true
 
       - name: build
         run: npm run build
