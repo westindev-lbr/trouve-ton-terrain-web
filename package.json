@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "e2e": "ng e2e",
-    "serve:dist": "http-server -p 4200 -c-1 dist/trouve-ton-terrain-web",
+    "serve:dist": "http-server -p 4200 -c-1 dist/trouve-ton-terrain-web/browser",
     "cypress:open": "cypress open",
     "cypress:run": "cypress run",
     "lint": "ng lint"
