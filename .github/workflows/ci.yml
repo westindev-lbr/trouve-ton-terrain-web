@@ -37,8 +37,8 @@ jobs:
         with:
           start: npm run serve:dist
           wait-on: http://localhost:4200
+          wait-on-timeout: 180
           browser: chrome
-          headless: true
 
       - name: build
         run: npm run build
