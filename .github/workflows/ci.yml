@@ -32,6 +32,9 @@ jobs:
       - name: check packages vulnerabilities
         run: npm audit || true
 
+      - name: build (angular)
+        run: npm run build
+
       - name: Run Cypress on dist
         uses: cypress-io/github-action@v6
         with:
@@ -39,9 +42,6 @@ jobs:
           wait-on: http://localhost:4200
           wait-on-timeout: 180
           browser: chrome
-
-      - name: build
-        run: npm run build
 
       - name: pack artifact (dist)
         run: tar -czf web_dist.tgz dist
