@@ -80,13 +80,17 @@ jobs:
           TARGET_DIR="$RELEASES_DIR/$TS"
 
           ssh -i /tmp/id_ci -o IdentitiesOnly=yes $SERVER_USER@$SERVER_IP "mkdir -p $TARGET_DIR $RELEASES_DIR && mkdir -p $(dirname $CURRENT_LINK)"
-          scp -i /tmp/id_ci -o IdentitiesOnly=yes api_artifact.tgz $SERVER_USER@$SERVER_IP:$TARGET_DIR/
+          scp -i /tmp/id_ci -o IdentitiesOnly=yes web_dist.tgz $SERVER_USER@$SERVER_IP:$TARGET_DIR/
 
           ssh -i /tmp/id_ci -o IdentitiesOnly=yes $SERVER_USER@$SERVER_IP "
             set -e
             cd $TARGET_DIR
             tar -xzf web_dist.tgz && rm -f web_dist.tgz
-            # Si Angular génère dist/<projectName>, tu peux ajuster le lien :
-            # ln -sfn $TARGET_DIR/dist/<projectName> $CURRENT_LINK
-            ln -sfn $TARGET_DIR/dist $CURRENT_LINK
+            if [ -d \"$TARGET_DIR/dist/trouve-ton-terrain-web/browser\" ]; then
+              LINK_TARGET=\"$TARGET_DIR/dist/trouve-ton-terrain-web/browser\"
+            else
+              LINK_TARGET=\"$TARGET_DIR/dist/trouve-ton-terrain-web\"
+            fi
+
+            ln -sfn \"\$LINK_TARGET\" $CURRENT_LINK
           "
